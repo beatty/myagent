@@ -102,6 +102,50 @@ def request_meeting(topic: str, date_time: str) -> dict:
         "disposition": "I've sent the meeting request to the owner.",
     }
 
+def write_file(filename: str, content: str) -> dict:
+    """Writes content to a file.
+    If no path is specified in the filename, defaults to ~/wall directory.
+
+    Args:
+        filename: The name of the file to write to
+        content: The content to write to the file
+
+    Returns:
+        dict: information about the status of the file writing operation
+    """
+    try:
+        # Determine the file path
+        file_path = Path(filename)
+
+        # If no directory specified, use ~/wall as default
+        if not file_path.is_absolute() and '/' not in filename:
+            # Create ~/wall directory if it doesn't exist
+            wall_dir = Path.home() / "wall"
+            wall_dir.mkdir(exist_ok=True)
+            file_path = wall_dir / filename
+
+        # Create parent directories if they don't exist
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write content to file
+        with open(file_path, "w") as f:
+            f.write(content)
+
+        return {
+            "status": "success",
+            "disposition": f"Content was successfully written to {file_path}",
+            "file_path": str(file_path)
+        }
+    except Exception as e:
+        # Log the error and relay it back to the LLM
+        error_message = f"Error in write_file: {e}"
+        print(error_message)
+        return {
+            "status": "error",
+            "disposition": f"There was an error writing to the file: {str(e)}",
+            "error": str(e)
+        }
+
 config = load_config()
 agent_config = config.get("agent", {})
 owner_config = config.get("owner", {})
@@ -119,5 +163,5 @@ root_agent = Agent(
         f"Here are my special instructions: {agent_config.get('instructions', '')} "
         f"You must exhibit the following personality traits: {agent_config.get('personality', '')}"
     ),
-    tools=[get_bio, relay_message],
+    tools=[get_bio, relay_message, write_file],
 )
