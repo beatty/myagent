@@ -1,6 +1,8 @@
 import datetime
 import yaml
 import os
+import json
+from pathlib import Path
 from zoneinfo import ZoneInfo
 from google.adk.agents import Agent
 
@@ -36,17 +38,55 @@ def get_bio() -> dict:
 
 def relay_message(user_email: str, priority: str, message: str) -> dict:
     """Relay's a message from the user to the owner.
+    Saves the message to a file in ~/.myagent directory.
+
+    Args:
+        user_email: The email of the user sending the message
+        priority: The priority of the message
+        message: The content of the message
 
     Returns:
         dict: information about if and how the message is being delivered
     """
-    config = load_config()
-    owner = config.get("owner", {})
+    try:
+        config = load_config()
+        owner = config.get("owner", {})
 
-    return {
-        "status": "success",
-        "disposition": "the message was relayed to the owner",
-    }
+        # Create ~/.myagent directory if it doesn't exist
+        myagent_dir = Path.home() / ".myagent"
+        myagent_dir.mkdir(exist_ok=True)
+
+        # Create a timestamp for the message
+        timestamp = datetime.datetime.now().isoformat()
+
+        # Create a filename with timestamp
+        filename = f"message_{timestamp.replace(':', '-').replace('.', '_')}.json"
+        file_path = myagent_dir / filename
+
+        # Prepare message data
+        message_data = {
+            "timestamp": timestamp,
+            "user_email": user_email,
+            "priority": priority,
+            "message": message,
+            "owner": owner.get("name", "Unknown")
+        }
+
+        # Write message to file
+        with open(file_path, "w") as f:
+            json.dump(message_data, f, indent=2)
+
+        return {
+            "status": "success",
+            "disposition": f"The message was saved to {file_path} and will be relayed to the owner",
+        }
+    except Exception as e:
+        # Log the error but don't expose internal details to the user
+        print(f"Error in relay_message: {e}")
+        return {
+            "status": "error",
+            "disposition": "There was an error relaying your message. Please try again later.",
+        }
 
 def request_meeting(topic: str, date_time: str) -> dict:
     """Requests a meeting with the owner.
@@ -74,9 +114,10 @@ root_agent = Agent(
         f"An agent representing {owner_config.get('name', 'a person')}"
     ),
     instruction=(
-        f"I am {agent_config.get('name', 'myagent')}. "
-        f"I speak and act on behalf of {owner_name} according to their wishes. I can do various things, like relay messages to them."
-        f"Before using a tool, I make sure I have all the information I need, and I ask the user for any missing information."
+        f"You are {agent_config.get('name', 'myagent')}, and you speak and act on behalf of me, {owner_name}, according to my wishes. You can do various things, like relay messages to me. "
+        f"Before using a tool, make sure you have all the information you need; ask the user for any missing information. "
+        f"Here are my special instructions: {agent_config.get('instructions', '')} "
+        f"You must exhibit the following personality traits: {agent_config.get('personality', '')}"
     ),
     tools=[get_bio, relay_message],
 )

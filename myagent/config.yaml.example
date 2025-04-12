@@ -6,4 +6,6 @@ owner:
 
 agent:
   name: "YourAgentName"
-  model: "gemini-2.0-flash-exp"
+  model: "gemini-2.0-flash-exp" # or any other Google AI Studio model you prefer
+  instructions: "[special instructions for your agent]"
+  personality: "[the personality traits you want your agent to exhibit]"
