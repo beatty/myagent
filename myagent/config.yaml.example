@@ -1,0 +1,9 @@
+owner:
+  name: "Your Name"
+  email: "your.email@example.com"
+  location: "Your Location"
+  bio: "A brief description about yourself"
+
+agent:
+  name: "YourAgentName"
+  model: "gemini-2.0-flash-exp"
