@@ -2,6 +2,7 @@ import datetime
 import yaml
 import os
 import json
+import base64
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from google.adk.agents import Agent
@@ -146,6 +147,97 @@ def write_file(filename: str, content: str) -> dict:
             "error": str(e)
         }
 
+def read_file(filename: str) -> dict:
+    """Reads content from a file.
+    If no path is specified in the filename, defaults to ~/wall directory.
+
+    Args:
+        filename: The name of the file to read from
+
+    Returns:
+        dict: information about the status of the file reading operation and the content
+    """
+    try:
+        # Determine the file path
+        file_path = Path(filename)
+
+        # If no directory specified, use ~/wall as default
+        if not file_path.is_absolute() and '/' not in filename:
+            wall_dir = Path.home() / "wall"
+            file_path = wall_dir / filename
+
+        # Check if file exists
+        if not file_path.exists():
+            return {
+                "status": "error",
+                "disposition": f"File not found: {file_path}",
+                "error": "File not found"
+            }
+
+        # Determine MIME type based on file extension
+        mime_type = "text/plain"  # Default MIME type
+        if file_path.suffix.lower() in [".jpg", ".jpeg"]:
+            mime_type = "image/jpeg"
+        elif file_path.suffix.lower() == ".png":
+            mime_type = "image/png"
+        elif file_path.suffix.lower() == ".pdf":
+            mime_type = "application/pdf"
+        elif file_path.suffix.lower() == ".json":
+            mime_type = "application/json"
+
+        # For binary files, read as binary and encode as base64
+        if mime_type.startswith("image/") or mime_type == "application/pdf":
+            with open(file_path, "rb") as f:
+                file_bytes = f.read()
+                # Convert binary data to base64 for safe transport
+                base64_data = base64.b64encode(file_bytes).decode('ascii')
+
+                return {
+                    "status": "success",
+                    "disposition": f"Content was successfully read from {file_path}",
+                    "file_path": str(file_path),
+                    "mime_type": mime_type,
+                    "encoding": "base64",
+                    "data": base64_data
+                }
+
+        # For text files, read as text
+        else:
+            try:
+                with open(file_path, "r") as f:
+                    content = f.read()
+
+                return {
+                    "status": "success",
+                    "disposition": f"Content was successfully read from {file_path}",
+                    "file_path": str(file_path),
+                    "mime_type": mime_type,
+                    "content": content
+                }
+            except UnicodeDecodeError:
+                # If we can't decode as text, fall back to binary/base64
+                with open(file_path, "rb") as f:
+                    file_bytes = f.read()
+                    base64_data = base64.b64encode(file_bytes).decode('ascii')
+
+                    return {
+                        "status": "success",
+                        "disposition": f"Content was successfully read from {file_path} (binary)",
+                        "file_path": str(file_path),
+                        "mime_type": mime_type,
+                        "encoding": "base64",
+                        "data": base64_data
+                    }
+    except Exception as e:
+        # Log the error and relay it back to the LLM
+        error_message = f"Error in read_file: {e}"
+        print(error_message)
+        return {
+            "status": "error",
+            "disposition": f"There was an error reading from the file: {str(e)}",
+            "error": str(e)
+        }
+
 config = load_config()
 agent_config = config.get("agent", {})
 owner_config = config.get("owner", {})
@@ -163,5 +255,5 @@ root_agent = Agent(
         f"Here are my special instructions: {agent_config.get('instructions', '')} "
         f"You must exhibit the following personality traits: {agent_config.get('personality', '')}"
     ),
-    tools=[get_bio, relay_message, write_file],
+    tools=[get_bio, relay_message, write_file, read_file],
 )
